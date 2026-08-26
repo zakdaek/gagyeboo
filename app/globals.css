@@ -426,3 +426,122 @@ a { color: inherit; }
   .mobile-bar a.active { color: white; background: rgba(255,255,255,.1); }
 }
 
+
+/* ==========================================================================
+   모바일 반응형 보완
+   원본 index.html에서 넘어온 960/650px 미디어쿼리는 그대로 두고,
+   실제 휴대폰에서 문제가 되는 지점만 뒤에서 덮어쓴다.
+   ========================================================================== */
+
+/* 1. iOS가 가로 모드에서 임의로 본문 글자를 키우는 것을 막는다. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* 2. 모바일 브라우저의 주소창 때문에 100vh가 실제 화면보다 커지는 문제.
+      dvh를 지원하면 그쪽을 쓰고, 아니면 기존 100vh로 남는다. */
+.shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.sidebar {
+  height: 100vh;
+  height: 100dvh;
+}
+.modal-card {
+  max-height: calc(100vh - 28px);
+  max-height: calc(100dvh - 28px);
+}
+
+/* 3. 내역 표는 열이 7개라 좁은 화면에서 반드시 가로 스크롤이 필요하다.
+      기존에는 650px 이하에서만 감싸져 있어 651~960px 구간이 뭉개졌다. */
+.table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+@media (max-width: 960px) {
+  .table-wrap table {
+    min-width: 700px;
+  }
+  .table-wrap .stats-table {
+    min-width: 0;
+  }
+
+  /* 4. iOS Safari는 글자 크기가 16px 미만인 입력에 포커스가 가면 화면을
+        강제로 확대하고 되돌리지 않는다. 빠른 입력 폼과 필터가 12px이라
+        수입·지출을 넣을 때마다 화면이 틀어졌다. */
+  .quick-form input,
+  .quick-form select,
+  .filter-select {
+    font-size: 16px;
+  }
+  .quick-form input,
+  .quick-form select {
+    padding: 10px 12px;
+  }
+
+  /* 5. 손가락으로 누르는 버튼 최소 크기 확보 */
+  .icon-btn {
+    padding: 10px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .month-control button {
+    width: 40px;
+    height: 40px;
+  }
+  .mobile-bar button,
+  .mobile-bar a {
+    min-height: 44px;
+    display: grid;
+    align-content: center;
+  }
+}
+
+@media (max-width: 650px) {
+  /* 6. 합계 금액이 카드 폭을 넘어 잘리던 문제.
+        .summary-card가 overflow:hidden이라 숫자 끝이 사라졌다. */
+  .summary-value {
+    font-size: clamp(17px, 5.2vw, 22px);
+  }
+  .summary-card {
+    min-width: 0;
+  }
+}
+
+/* 아주 좁은 기기(320~360px)에서 하단 탭 5개가 서로 붙는 것 완화 */
+@media (max-width: 360px) {
+  .mobile-bar {
+    left: 8px;
+    right: 8px;
+    padding: 5px;
+  }
+  .mobile-bar button,
+  .mobile-bar a {
+    font-size: 10px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+}
+
+/* 7. 한글 줄바꿈: 기본값은 단어 중간에서 끊어져 "수입·지 / 출 관리"처럼 깨진다.
+      keep-all로 어절 단위로 끊고, 끊을 곳이 없는 긴 문자열만 예외로 강제 줄바꿈. */
+body {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* 8. 아주 좁은 기기에서 제목이 월 선택기를 밀어내지 않도록 */
+@media (max-width: 400px) {
+  h1 {
+    font-size: 22px;
+  }
+  .topbar {
+    gap: 10px;
+  }
+}
