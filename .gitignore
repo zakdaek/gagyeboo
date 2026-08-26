@@ -8,3 +8,5 @@ out
 !.env.example
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
