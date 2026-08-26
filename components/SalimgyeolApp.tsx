@@ -29,10 +29,18 @@ import type {
   ProductType,
   RepaymentMethod,
 } from "@/lib/types";
-
-const STORAGE_KEY = "salimgyeol-records-v1";
-const PRODUCTS_KEY = "salimgyeol-products-v1";
-const LOANS_KEY = "salimgyeol-loans-v1";
+import {
+  clearAllData,
+  deleteBudgetRecord,
+  deleteFinancialProduct,
+  deleteLoanRecord,
+  errorMessage,
+  fetchAll,
+  migrateLegacyLocalData,
+  saveBudgetRecord,
+  saveFinancialProduct,
+  saveLoanRecord,
+} from "@/lib/store";
 
 const categories = {
   expense: [
@@ -88,15 +96,6 @@ const chartColors = [
   "#798b47",
   "#cd8d68",
 ];
-
-function safeParse<T>(value: string | null, fallback: T): T {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 function aggregate(
   expenses: LedgerRecord[],
@@ -184,6 +183,7 @@ function placeholderDate() {
 
 export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey }) {
   const [hydrated, setHydrated] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [records, setRecords] = useState<LedgerRecord[]>([]);
   const [financialProducts, setFinancialProducts] = useState<FinancialProduct[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -258,18 +258,29 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const [resetConfirmText, setResetConfirmText] = useState("");
 
   useEffect(() => {
-    let loadedRecords = safeParse<LedgerRecord[]>(localStorage.getItem(STORAGE_KEY), []);
-    if (loadedRecords.some((record) => record.type === "income" && record.category === "부가수입")) {
-      loadedRecords = loadedRecords.map((record) =>
-        record.type === "income" && record.category === "부가수입"
-          ? { ...record, category: "부수입" }
-          : record,
-      );
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(loadedRecords));
-    }
-    setRecords(loadedRecords);
-    setFinancialProducts(safeParse<FinancialProduct[]>(localStorage.getItem(PRODUCTS_KEY), []));
-    setLoans(safeParse<Loan[]>(localStorage.getItem(LOANS_KEY), []));
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        let data = await fetchAll();
+        // 원격이 비어 있을 때만 예전 localStorage 데이터를 한 번 올려준다.
+        if (!data.records.length && !data.financialProducts.length && !data.loans.length) {
+          if (await migrateLegacyLocalData()) data = await fetchAll();
+        }
+        if (cancelled) return;
+        setRecords(data.records);
+        setFinancialProducts(data.financialProducts);
+        setLoans(data.loans);
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) setLoadError(errorMessage(error));
+      }
+    };
+
+    void load().then(() => {
+      if (!cancelled) setHydrated(true);
+    });
+
     const now = firstOfMonth(new Date());
     setViewDate(now);
     const date = formatLocalDate(new Date());
@@ -280,23 +291,11 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     setProductForm((form) => ({ ...form, startDate: date }));
     setLoanForm((form) => ({ ...form, startDate: date }));
     setRepaymentDate(date);
-    setHydrated(true);
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  }, [records, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(financialProducts));
-  }, [financialProducts, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(LOANS_KEY, JSON.stringify(loans));
-  }, [loans, hydrated]);
 
   useEffect(() => {
     if (!toast) return;
@@ -433,31 +432,60 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[var(--paper)] px-6 text-center text-[var(--muted)]">
+        <div>
+          <p className="text-sm font-semibold">Supabase에서 데이터를 불러오지 못했어요.</p>
+          <p className="mt-2 text-xs">{loadError}</p>
+          <p className="mt-1 text-xs">.env.local의 URL·키 설정과 네트워크 상태를 확인해주세요.</p>
+        </div>
+      </div>
+    );
+  }
+
   const showToast = (message: string) => setToast(message);
+
+  // 화면은 먼저 바꾸고 Supabase에 반영한다. 실패하면 서버 상태를 다시 읽어 되돌린다.
+  const persist = async (run: () => Promise<void>, failureMessage: string) => {
+    try {
+      await run();
+    } catch (error) {
+      console.error(error);
+      setToast(`${failureMessage} 최신 데이터를 다시 불러옵니다.`);
+      try {
+        const data = await fetchAll();
+        setRecords(data.records);
+        setFinancialProducts(data.financialProducts);
+        setLoans(data.loans);
+      } catch (reloadError) {
+        console.error(reloadError);
+      }
+    }
+  };
 
   const saveIncome = (event: FormEvent) => {
     event.preventDefault();
     const amount = Number(incomeForm.amount);
     if (!amount || !incomeForm.title.trim()) return;
-    setRecords((items) => [
-      ...items,
-      {
-        id: uid(),
-        type: "income",
-        date: incomeForm.date,
-        title: incomeForm.title.trim(),
-        amount,
-        category: incomeForm.category,
-        subcategory: "",
-        costType: "",
-        paymentMethod: "",
-        repeatStart: "",
-        repeatEnd: "",
-        repeatForever: false,
-        owner: incomeForm.owner,
-        createdAt: Date.now(),
-      },
-    ]);
+    const record: LedgerRecord = {
+      id: uid(),
+      type: "income",
+      date: incomeForm.date,
+      title: incomeForm.title.trim(),
+      amount,
+      category: incomeForm.category,
+      subcategory: "",
+      costType: "",
+      paymentMethod: "",
+      repeatStart: "",
+      repeatEnd: "",
+      repeatForever: false,
+      owner: incomeForm.owner,
+      createdAt: Date.now(),
+    };
+    setRecords((items) => [...items, record]);
+    void persist(() => saveBudgetRecord(record), "수입을 저장하지 못했어요.");
     setIncomeForm({ ...incomeForm, amount: "", title: "", date: quickEntryDate() });
     showToast("수입을 저장했어요.");
   };
@@ -470,25 +498,24 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
       showToast("반복 종료 월을 시작 월 이후로 설정해주세요.");
       return;
     }
-    setRecords((items) => [
-      ...items,
-      {
-        id: uid(),
-        type: "expense",
-        date: fixedForm.date,
-        title: fixedForm.title.trim(),
-        amount,
-        category: fixedForm.category,
-        subcategory: fixedForm.category === "식비" ? fixedForm.subcategory : "",
-        costType: "fixed",
-        paymentMethod: fixedForm.paymentMethod,
-        repeatStart: fixedForm.repeatStart,
-        repeatEnd: fixedForm.repeatForever ? "" : fixedForm.repeatEnd,
-        repeatForever: fixedForm.repeatForever,
-        owner: "",
-        createdAt: Date.now(),
-      },
-    ]);
+    const record: LedgerRecord = {
+      id: uid(),
+      type: "expense",
+      date: fixedForm.date,
+      title: fixedForm.title.trim(),
+      amount,
+      category: fixedForm.category,
+      subcategory: fixedForm.category === "식비" ? fixedForm.subcategory : "",
+      costType: "fixed",
+      paymentMethod: fixedForm.paymentMethod,
+      repeatStart: fixedForm.repeatStart,
+      repeatEnd: fixedForm.repeatForever ? "" : fixedForm.repeatEnd,
+      repeatForever: fixedForm.repeatForever,
+      owner: "",
+      createdAt: Date.now(),
+    };
+    setRecords((items) => [...items, record]);
+    void persist(() => saveBudgetRecord(record), "고정지출을 저장하지 못했어요.");
     setFixedForm({
       ...fixedForm,
       amount: "",
@@ -505,25 +532,24 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     event.preventDefault();
     const amount = Number(variableForm.amount);
     if (!amount || !variableForm.title.trim()) return;
-    setRecords((items) => [
-      ...items,
-      {
-        id: uid(),
-        type: "expense",
-        date: variableForm.date,
-        title: variableForm.title.trim(),
-        amount,
-        category: variableForm.category,
-        subcategory: variableForm.category === "식비" ? variableForm.subcategory : "",
-        costType: "variable",
-        paymentMethod: variableForm.paymentMethod,
-        repeatStart: "",
-        repeatEnd: "",
-        repeatForever: false,
-        owner: "",
-        createdAt: Date.now(),
-      },
-    ]);
+    const record: LedgerRecord = {
+      id: uid(),
+      type: "expense",
+      date: variableForm.date,
+      title: variableForm.title.trim(),
+      amount,
+      category: variableForm.category,
+      subcategory: variableForm.category === "식비" ? variableForm.subcategory : "",
+      costType: "variable",
+      paymentMethod: variableForm.paymentMethod,
+      repeatStart: "",
+      repeatEnd: "",
+      repeatForever: false,
+      owner: "",
+      createdAt: Date.now(),
+    };
+    setRecords((items) => [...items, record]);
+    void persist(() => saveBudgetRecord(record), "변동지출을 저장하지 못했어요.");
     setVariableForm({ ...variableForm, amount: "", title: "", date: quickEntryDate() });
     showToast("변동지출을 저장했어요.");
   };
@@ -585,6 +611,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
       createdAt: original.createdAt,
     };
     setRecords((items) => items.map((record) => (record.id === next.id ? next : record)));
+    void persist(() => saveBudgetRecord(next), "내역 수정을 저장하지 못했어요.");
     setEditingRecord(null);
     showToast("내역을 수정했어요.");
   };
@@ -635,6 +662,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     setFinancialProducts((items) =>
       editingProductId ? items.map((item) => (item.id === editingProductId ? product : item)) : [...items, product],
     );
+    void persist(() => saveFinancialProduct(product), "상품 정보를 저장하지 못했어요.");
     const wasEditing = Boolean(editingProductId);
     resetProductForm(productForm.type);
     showToast(wasEditing ? "상품 정보를 수정했어요." : `${productForm.type === "installment" ? "적금" : "예금"} 상품을 저장했어요.`);
@@ -673,28 +701,30 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const saveRateChange = (event: FormEvent) => {
     event.preventDefault();
     if (!rateProductId || !rateDate || changedRate === "") return;
-    setFinancialProducts((items) =>
-      items.map((product) => {
-        if (product.id !== rateProductId) return product;
-        const changes = [
-          ...(product.rateChanges || []).filter((change) => change.date !== rateDate),
-          { date: rateDate, rate: Number(changedRate) },
-        ].sort((a, b) => a.date.localeCompare(b.date));
-        return { ...product, rateChanges: changes };
-      }),
-    );
+    const target = financialProducts.find((product) => product.id === rateProductId);
+    if (!target) return;
+    const updated: FinancialProduct = {
+      ...target,
+      rateChanges: [
+        ...(target.rateChanges || []).filter((change) => change.date !== rateDate),
+        { date: rateDate, rate: Number(changedRate) },
+      ].sort((a, b) => a.date.localeCompare(b.date)),
+    };
+    setFinancialProducts((items) => items.map((product) => (product.id === updated.id ? updated : product)));
+    void persist(() => saveFinancialProduct(updated), "변경 금리를 저장하지 못했어요.");
     setChangedRate("");
     showToast("변경 금리를 적용해 만기액을 다시 계산했어요.");
   };
 
   const removeRateChange = (date: string) => {
-    setFinancialProducts((items) =>
-      items.map((product) =>
-        product.id === rateProductId
-          ? { ...product, rateChanges: (product.rateChanges || []).filter((change) => change.date !== date) }
-          : product,
-      ),
-    );
+    const target = financialProducts.find((product) => product.id === rateProductId);
+    if (!target) return;
+    const updated: FinancialProduct = {
+      ...target,
+      rateChanges: (target.rateChanges || []).filter((change) => change.date !== date),
+    };
+    setFinancialProducts((items) => items.map((product) => (product.id === updated.id ? updated : product)));
+    void persist(() => saveFinancialProduct(updated), "금리 변경 이력을 삭제하지 못했어요.");
     showToast("금리 변경 이력을 삭제했어요.");
   };
 
@@ -744,6 +774,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
       createdAt: existing?.createdAt || Date.now(),
     };
     setLoans((items) => (editingLoanId ? items.map((item) => (item.id === editingLoanId ? loan : item)) : [...items, loan]));
+    void persist(() => saveLoanRecord(loan), "대출 정보를 저장하지 못했어요.");
     const wasEditing = Boolean(editingLoanId);
     resetLoanForm();
     showToast(wasEditing ? "대출 정보를 수정했어요." : "대출을 등록했어요.");
@@ -793,29 +824,28 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
       showToast("상환 원금이나 이자를 입력해주세요.");
       return;
     }
-    setLoans((items) =>
-      items.map((loan) =>
-        loan.id === repaymentLoanId
-          ? {
-              ...loan,
-              payments: [...(loan.payments || []), { id: uid(), date: repaymentDate, principal, interest }],
-            }
-          : loan,
-      ),
-    );
+    const target = loans.find((loan) => loan.id === repaymentLoanId);
+    if (!target) return;
+    const updated: Loan = {
+      ...target,
+      payments: [...(target.payments || []), { id: uid(), date: repaymentDate, principal, interest }],
+    };
+    setLoans((items) => items.map((loan) => (loan.id === updated.id ? updated : loan)));
+    void persist(() => saveLoanRecord(updated), "상환 내역을 저장하지 못했어요.");
     setRepaidPrincipal("");
     setRepaidInterest("");
     showToast("상환 내역을 기록했어요.");
   };
 
   const deleteRepayment = (paymentId: string) => {
-    setLoans((items) =>
-      items.map((loan) =>
-        loan.id === repaymentLoanId
-          ? { ...loan, payments: (loan.payments || []).filter((payment) => payment.id !== paymentId) }
-          : loan,
-      ),
-    );
+    const target = loans.find((loan) => loan.id === repaymentLoanId);
+    if (!target) return;
+    const updated: Loan = {
+      ...target,
+      payments: (target.payments || []).filter((payment) => payment.id !== paymentId),
+    };
+    setLoans((items) => items.map((loan) => (loan.id === updated.id ? updated : loan)));
+    void persist(() => saveLoanRecord(updated), "상환 기록을 삭제하지 못했어요.");
     showToast("상환 기록을 삭제했어요.");
   };
 
@@ -825,9 +855,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     setRecords([]);
     setFinancialProducts([]);
     setLoans([]);
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(PRODUCTS_KEY);
-    localStorage.removeItem(LOANS_KEY);
+    void persist(() => clearAllData(), "데이터를 모두 삭제하지 못했어요.");
     const now = firstOfMonth(new Date());
     setViewDate(now);
     setTypeFilter("all");
@@ -1519,6 +1547,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                                   onClick={() => {
                                     if (window.confirm("이 내역을 삭제할까요?")) {
                                       setRecords((items) => items.filter((item) => item.id !== record.id));
+                                      void persist(() => deleteBudgetRecord(record.id), "내역을 삭제하지 못했어요.");
                                       showToast("내역을 삭제했어요.");
                                     }
                                   }}
@@ -1818,6 +1847,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                                     onClick={() => {
                                       if (window.confirm("이 대출과 상환 기록을 모두 삭제할까요?")) {
                                         setLoans((items) => items.filter((item) => item.id !== loan.id));
+                                        void persist(() => deleteLoanRecord(loan.id), "대출을 삭제하지 못했어요.");
                                         showToast("대출 정보를 삭제했어요.");
                                       }
                                     }}
@@ -2043,6 +2073,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                                   onClick={() => {
                                     if (window.confirm("이 금융상품을 삭제할까요?")) {
                                       setFinancialProducts((items) => items.filter((item) => item.id !== product.id));
+                                      void persist(() => deleteFinancialProduct(product.id), "금융상품을 삭제하지 못했어요.");
                                       showToast("금융상품을 삭제했어요.");
                                     }
                                   }}
