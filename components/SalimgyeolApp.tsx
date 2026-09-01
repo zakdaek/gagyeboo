@@ -97,6 +97,23 @@ const chartColors = [
   "#cd8d68",
 ];
 
+const paymentMethodOptions: Array<{
+  value: Exclude<PaymentMethod, "" | "creditCard">;
+  label: string;
+}> = [
+  { value: "cash", label: "현금" },
+  { value: "hyundaiCard", label: "현대카드" },
+  { value: "shinhanCard", label: "신한카드" },
+];
+
+function paymentMethodName(paymentMethod: PaymentMethod) {
+  if (paymentMethod === "cash") return "현금";
+  if (paymentMethod === "hyundaiCard") return "현대카드";
+  if (paymentMethod === "shinhanCard") return "신한카드";
+  if (paymentMethod === "creditCard") return "신용카드(기존)";
+  return "미분류";
+}
+
 function aggregate(
   expenses: LedgerRecord[],
   keySelector: (record: LedgerRecord) => string,
@@ -405,10 +422,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
 
   const categoryEntries = useMemo(() => aggregate(expenses, (record) => record.category || "기타 지출"), [expenses]);
   const paymentEntries = useMemo(
-    () =>
-      aggregate(expenses, (record) =>
-        record.paymentMethod === "cash" ? "현금" : record.paymentMethod === "creditCard" ? "신용카드" : "미분류",
-      ),
+    () => aggregate(expenses, (record) => paymentMethodName(record.paymentMethod)),
     [expenses],
   );
 
@@ -1281,8 +1295,9 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                                 setFixedForm({ ...fixedForm, paymentMethod: event.target.value as QuickExpenseForm["paymentMethod"] })
                               }
                             >
-                              <option value="cash">현금</option>
-                              <option value="creditCard">신용카드</option>
+                              {paymentMethodOptions.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
                             </select>
                           </div>
                         </div>
@@ -1413,8 +1428,9 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                                 })
                               }
                             >
-                              <option value="cash">현금</option>
-                              <option value="creditCard">신용카드</option>
+                              {paymentMethodOptions.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
                             </select>
                           </div>
                         </div>
@@ -1525,13 +1541,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                               </td>
                               <td>{record.type === "expense" ? (record.costType === "fixed" ? "고정 비용" : "변동 비용") : "—"}</td>
                               <td>
-                                {record.type === "expense"
-                                  ? record.paymentMethod === "cash"
-                                    ? "현금"
-                                    : record.paymentMethod === "creditCard"
-                                      ? "신용카드"
-                                      : "미분류"
-                                  : "—"}
+                                {record.type === "expense" ? paymentMethodName(record.paymentMethod) : "—"}
                               </td>
                               <td className={`amount-cell ${record.type}`}>
                                 {record.type === "income" ? "+" : "-"}
@@ -1579,7 +1589,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
               <div className="statistics-grid">
                 {[
                   { title: "분류별 통계", subtitle: "어디에 가장 많이 지출했는지 확인해요", entries: categoryEntries, label: "분류별 지출" },
-                  { title: "결제 수단별 통계", subtitle: "현금과 신용카드 사용 비중을 비교해요", entries: paymentEntries, label: "결제 수단별 지출" },
+                  { title: "결제 수단별 통계", subtitle: "현금과 카드별 사용 비중을 비교해요", entries: paymentEntries, label: "결제 수단별 지출" },
                 ].map((group) => (
                   <div className="statistics-group" key={group.title}>
                     <h3>{group.title}</h3>
@@ -2377,8 +2387,12 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                       value={editingRecord.paymentMethod || "cash"}
                       onChange={(event) => setEditingRecord({ ...editingRecord, paymentMethod: event.target.value as PaymentMethod })}
                     >
-                      <option value="cash">현금</option>
-                      <option value="creditCard">신용카드</option>
+                      {editingRecord.paymentMethod === "creditCard" && (
+                        <option value="creditCard">신용카드(기존)</option>
+                      )}
+                      {paymentMethodOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </div>
                 )}

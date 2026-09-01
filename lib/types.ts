@@ -1,7 +1,8 @@
 export type PageKey = "overview" | "ledger" | "loans" | "savings" | "cash";
 export type RecordType = "income" | "expense";
 export type CostType = "fixed" | "variable" | "";
-export type PaymentMethod = "cash" | "creditCard" | "";
+// `creditCard` is kept for records created before cards were split by issuer.
+export type PaymentMethod = "cash" | "hyundaiCard" | "shinhanCard" | "creditCard" | "";
 export type IncomeOwner = "me" | "spouse" | "company" | "other" | "";
 export type ProductType = "installment" | "deposit";
 export type InterestType = "simple" | "compound" | "annualCompound";
