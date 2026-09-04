@@ -59,7 +59,7 @@ const categories = {
     "출장비 지출",
     "기타 지출",
   ],
-  income: ["월급", "회사 출장비 지급", "부수입", "기타 수입"],
+  income: ["월급", "회사 출장비 지급", "부수입", "앱테크 수입", "기타 수입"],
 } as const;
 
 const pageInfo: Record<PageKey, { title: string; eyebrow: string; href: string }> = {
@@ -135,6 +135,13 @@ type QuickIncomeForm = {
   title: string;
   category: string;
   owner: Exclude<IncomeOwner, "">;
+};
+
+type AppTechForm = {
+  date: string;
+  amount: string;
+  title: string;
+  repeatForever: boolean;
 };
 
 type QuickExpenseForm = {
@@ -214,6 +221,12 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     title: "",
     category: categories.income[0],
     owner: "me",
+  });
+  const [appTechForm, setAppTechForm] = useState<AppTechForm>({
+    date: "2000-01-01",
+    amount: "",
+    title: "",
+    repeatForever: false,
   });
   const [fixedForm, setFixedForm] = useState<QuickExpenseForm>({
     date: "2000-01-01",
@@ -303,6 +316,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     const date = formatLocalDate(new Date());
     const month = monthKey(now);
     setIncomeForm((form) => ({ ...form, date }));
+    setAppTechForm((form) => ({ ...form, date }));
     setVariableForm((form) => ({ ...form, date }));
     setFixedForm((form) => ({ ...form, date, repeatStart: month, repeatEnd: month }));
     setProductForm((form) => ({ ...form, startDate: date }));
@@ -330,6 +344,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     const quickDate = quickEntryDate(date);
     const key = monthKey(date);
     setIncomeForm({ date: quickDate, amount: "", title: "", category: categories.income[0], owner: "me" });
+    setAppTechForm({ date: quickDate, amount: "", title: "", repeatForever: false });
     setVariableForm({
       date: quickDate,
       amount: "",
@@ -365,7 +380,9 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const currentRecords = useMemo(() => {
     const key = monthKey(viewDate);
     return records.flatMap((record) => {
-      if (record.type === "expense" && record.costType === "fixed") {
+      const isRecurringExpense = record.type === "expense" && record.costType === "fixed";
+      const isRecurringAppTech = record.type === "income" && record.category === "앱테크 수입" && record.repeatForever;
+      if (isRecurringExpense || isRecurringAppTech) {
         const effectiveRepeatStart = record.repeatStart || record.date.slice(0, 7);
         const repeatsWithoutEnd = record.repeatForever || !record.repeatEnd;
         if (key < effectiveRepeatStart || (!repeatsWithoutEnd && key > record.repeatEnd)) return [];
@@ -407,6 +424,12 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const sideIncome = currentRecords
     .filter((record) => record.type === "income" && record.category === "부수입")
     .reduce((sum, record) => sum + record.amount, 0);
+  const appTechIncome = currentRecords
+    .filter((record) => record.type === "income" && record.category === "앱테크 수입")
+    .reduce((sum, record) => sum + record.amount, 0);
+  const appTechRows = currentRecords
+    .filter((record) => record.type === "income" && record.category === "앱테크 수입")
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 
   const filteredRecords = useMemo(() => {
     let items = [...currentRecords];
@@ -502,6 +525,32 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     void persist(() => saveBudgetRecord(record), "수입을 저장하지 못했어요.");
     setIncomeForm({ ...incomeForm, amount: "", title: "", date: quickEntryDate() });
     showToast("수입을 저장했어요.");
+  };
+
+  const saveAppTech = (event: FormEvent) => {
+    event.preventDefault();
+    const amount = Number(appTechForm.amount);
+    if (!amount || !appTechForm.title.trim()) return;
+    const record: LedgerRecord = {
+      id: uid(),
+      type: "income",
+      date: appTechForm.date,
+      title: appTechForm.title.trim(),
+      amount,
+      category: "앱테크 수입",
+      subcategory: "",
+      costType: "",
+      paymentMethod: "",
+      repeatStart: appTechForm.repeatForever ? appTechForm.date.slice(0, 7) : "",
+      repeatEnd: "",
+      repeatForever: appTechForm.repeatForever,
+      owner: "me",
+      createdAt: Date.now(),
+    };
+    setRecords((items) => [...items, record]);
+    void persist(() => saveBudgetRecord(record), "앱테크 수입을 저장하지 못했어요.");
+    setAppTechForm({ date: quickEntryDate(), amount: "", title: "", repeatForever: false });
+    showToast("앱테크 수입을 저장했어요.");
   };
 
   const saveFixed = (event: FormEvent) => {
@@ -1103,6 +1152,14 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                         </div>
                         <div className="person-amount">{money(sideIncome)}</div>
                       </div>
+                      <div className="person-row">
+                        <div className="avatar apptech-avatar">앱</div>
+                        <div className="person-copy">
+                          <strong>앱테크 수입</strong>
+                          <span>{appTechIncome ? "이번 달 앱테크 수입" : "매일 기록해보세요"}</span>
+                        </div>
+                        <div className="person-amount">{money(appTechIncome)}</div>
+                      </div>
                     </div>
                   </article>
                 )}
@@ -1452,6 +1509,90 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                         </button>
                       </form>
                     </section>
+                  </div>
+                </article>
+
+                <article className="panel apptech-panel" id="appTechIncome">
+                  <div className="panel-header">
+                    <div>
+                      <h2 className="panel-title">매일 앱테크 수입</h2>
+                      <p className="panel-subtitle">한 번 번 금액부터 매월 반복되는 소액 수입까지 간편하게 기록해요</p>
+                    </div>
+                    <div className="apptech-total">
+                      <span>이번 달 합계</span>
+                      <strong>{money(appTechIncome)}</strong>
+                    </div>
+                  </div>
+                  <div className="apptech-layout">
+                    <form className="quick-form apptech-form" onSubmit={saveAppTech}>
+                      <div className="two-fields">
+                        <div className="field">
+                          <label htmlFor="appTechDate">날짜</label>
+                          <input
+                            id="appTechDate"
+                            type="date"
+                            value={appTechForm.date}
+                            onChange={(event) => setAppTechForm({ ...appTechForm, date: event.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="appTechAmount">수입 금액</label>
+                          <input
+                            id="appTechAmount"
+                            type="number"
+                            min="1"
+                            step="1"
+                            placeholder="0"
+                            value={appTechForm.amount}
+                            onChange={(event) => setAppTechForm({ ...appTechForm, amount: event.target.value })}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="appTechTitle">앱 또는 활동명</label>
+                        <input
+                          id="appTechTitle"
+                          type="text"
+                          lang="ko"
+                          maxLength={40}
+                          placeholder="예: 만보기, 설문조사"
+                          value={appTechForm.title}
+                          onChange={(event) => setAppTechForm({ ...appTechForm, title: event.target.value })}
+                          required
+                        />
+                      </div>
+                      <label className="repeat-forever apptech-repeat-toggle">
+                        <input
+                          type="checkbox"
+                          checked={appTechForm.repeatForever}
+                          onChange={(event) => setAppTechForm({ ...appTechForm, repeatForever: event.target.checked })}
+                        />
+                        <span>매월 자동 반영</span>
+                      </label>
+                      <p className="apptech-repeat-note">매달 비슷하게 들어오는 포인트·캐시백이면 한 번만 등록해도 다음 달부터 자동으로 합산돼요.</p>
+                      <button type="submit" className="primary-btn">앱테크 수입 저장</button>
+                    </form>
+                    <div className="apptech-history">
+                      <div className="apptech-history-head">
+                        <strong>이번 달 기록</strong>
+                        <span>{appTechRows.length}건</span>
+                      </div>
+                      {appTechRows.length === 0 ? (
+                        <div className="apptech-empty">아직 기록이 없어요. 오늘 번 금액부터 남겨보세요.</div>
+                      ) : (
+                        appTechRows.map((record) => (
+                          <div className="apptech-row" key={record.id}>
+                            <div>
+                              <strong>{record.title}</strong>
+                              <span>{record.date.replaceAll("-", ".")}{record.isRecurring ? " · 매월 반복" : ""}</span>
+                            </div>
+                            <b>+{money(record.amount)}</b>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </article>
 

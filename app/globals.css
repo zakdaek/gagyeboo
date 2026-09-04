@@ -254,6 +254,29 @@
     .entry-box.fixed-entry { background: #f0f6f3; border-color: #d9e7e0; }
     .entry-box.variable-entry { background: #fff6ef; border-color: #f0dfd2; }
     .entry-box.income-entry { background: #f3f5f0; }
+    .apptech-panel { background: #fffaf3; border-color: #f0dfc9; }
+    .apptech-panel .panel-header { align-items: flex-start; }
+    .apptech-total { flex: 0 0 auto; padding: 10px 13px; border-radius: 12px; background: #fff0dc; color: #9b5732; text-align: right; }
+    .apptech-total span { display: block; font-size: 10px; margin-bottom: 4px; }
+    .apptech-total strong { display: block; font-size: 17px; }
+    .apptech-layout { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.2fr); gap: 28px; align-items: start; }
+    .apptech-form { padding: 17px; border: 1px solid #f0dfc9; border-radius: 15px; background: rgba(255,255,255,.72); }
+    .apptech-form .primary-btn { background: #9b5732; }
+    .apptech-form .primary-btn:hover { background: #7e4326; }
+    .apptech-repeat-toggle { margin: 0; }
+    .apptech-repeat-toggle span { color: #9b5732; }
+    .apptech-repeat-note { margin: -3px 0 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .apptech-history { min-width: 0; }
+    .apptech-history-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid #f0dfc9; }
+    .apptech-history-head strong { font-size: 14px; }
+    .apptech-history-head span { color: var(--muted); font-size: 11px; }
+    .apptech-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid #f0dfc9; }
+    .apptech-row strong, .apptech-row span { display: block; }
+    .apptech-row strong { font-size: 13px; }
+    .apptech-row span { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .apptech-row b { color: #9b5732; font-size: 13px; white-space: nowrap; }
+    .apptech-empty { padding: 32px 10px; color: var(--muted); font-size: 12px; text-align: center; border-bottom: 1px solid #f0dfc9; }
+    .apptech-avatar { background: #fff0dc; color: #9b5732; font-size: 11px; }
     .entry-box h3 { margin: 0; font-size: 16px; }
     .entry-box > p { margin: 5px 0 16px; color: var(--muted); font-size: 11px; line-height: 1.5; }
     .quick-form { display: flex; flex-direction: column; gap: 11px; flex: 1; }
@@ -363,6 +386,9 @@
       .statistics-grid { grid-template-columns: 1fr; }
       .loan-layout { grid-template-columns: 1fr; }
       .cash-analysis-grid { grid-template-columns: 1fr; }
+      .apptech-layout { grid-template-columns: 1fr; }
+      .apptech-panel .panel-header { flex-direction: column; }
+      .apptech-total { width: 100%; text-align: left; }
       .panel { padding: 19px 16px; border-radius: 18px; }
       .panel-header { align-items: flex-start; }
       .transactions-panel .panel-header { flex-direction: column; }
