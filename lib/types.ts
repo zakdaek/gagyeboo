@@ -1,4 +1,4 @@
-export type PageKey = "overview" | "ledger" | "loans" | "savings" | "cash";
+export type PageKey = "overview" | "ledger" | "installments" | "loans" | "savings" | "cash";
 export type RecordType = "income" | "expense";
 export type CostType = "fixed" | "variable" | "";
 // `creditCard` is kept for records created before cards were split by issuer.
@@ -66,6 +66,19 @@ export interface Loan {
   rate: number;
   method: RepaymentMethod;
   payments: LoanPayment[];
+  createdAt: number;
+}
+
+export interface Installment {
+  id: string;
+  name: string;
+  cardName: string;
+  totalAmount: number;
+  monthlyAmount: number;
+  months: number;
+  paidMonths: number;
+  startDate: string;
+  paymentDay: number;
   createdAt: number;
 }
 

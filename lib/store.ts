@@ -4,6 +4,7 @@ import type {
   DurationUnit,
   FinancialProduct,
   IncomeOwner,
+  Installment,
   InterestType,
   LedgerRecord,
   Loan,
@@ -64,6 +65,19 @@ type LoanRow = {
   rate: number | string;
   method: RepaymentMethod;
   payments: LoanPayment[] | null;
+  created_at: number | string;
+};
+
+type InstallmentRow = {
+  id: string;
+  name: string;
+  card_name: string;
+  total_amount: number | string;
+  monthly_amount: number | string;
+  months: number;
+  paid_months: number;
+  start_date: string | null;
+  payment_day: number;
   created_at: number | string;
 };
 
@@ -176,26 +190,59 @@ function fromLoan(loan: Loan): LoanRow {
   };
 }
 
+function toInstallment(row: InstallmentRow): Installment {
+  return {
+    id: row.id,
+    name: row.name,
+    cardName: row.card_name,
+    totalAmount: num(row.total_amount),
+    monthlyAmount: num(row.monthly_amount),
+    months: num(row.months),
+    paidMonths: num(row.paid_months),
+    startDate: row.start_date || "",
+    paymentDay: num(row.payment_day),
+    createdAt: num(row.created_at),
+  };
+}
+
+function fromInstallment(installment: Installment): InstallmentRow {
+  return {
+    id: installment.id,
+    name: installment.name || "",
+    card_name: installment.cardName || "",
+    total_amount: installment.totalAmount,
+    monthly_amount: installment.monthlyAmount,
+    months: installment.months,
+    paid_months: installment.paidMonths,
+    start_date: installment.startDate || null,
+    payment_day: installment.paymentDay,
+    created_at: installment.createdAt,
+  };
+}
+
 export type SalimgyeolData = {
   records: LedgerRecord[];
   financialProducts: FinancialProduct[];
   loans: Loan[];
+  installments: Installment[];
 };
 
 export async function fetchAll(): Promise<SalimgyeolData> {
-  const [budgetResult, productResult, loanResult] = await Promise.all([
+  const [budgetResult, productResult, loanResult, installmentResult] = await Promise.all([
     supabase.from("budget").select("*").order("created_at", { ascending: true }),
     supabase.from("financial_products").select("*").order("created_at", { ascending: true }),
     supabase.from("loans").select("*").order("created_at", { ascending: true }),
+    supabase.from("installments").select("*").order("created_at", { ascending: true }),
   ]);
 
-  const failure = budgetResult.error || productResult.error || loanResult.error;
+  const failure = budgetResult.error || productResult.error || loanResult.error || installmentResult.error;
   if (failure) throw failure;
 
   return {
     records: ((budgetResult.data || []) as BudgetRow[]).map(toRecord),
     financialProducts: ((productResult.data || []) as ProductRow[]).map(toProduct),
     loans: ((loanResult.data || []) as LoanRow[]).map(toLoan),
+    installments: ((installmentResult.data || []) as InstallmentRow[]).map(toInstallment),
   };
 }
 
@@ -229,12 +276,23 @@ export async function deleteLoanRecord(id: string) {
   if (error) throw error;
 }
 
+export async function saveInstallment(installment: Installment) {
+  const { error } = await supabase.from("installments").upsert(fromInstallment(installment));
+  if (error) throw error;
+}
+
+export async function deleteInstallment(id: string) {
+  const { error } = await supabase.from("installments").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function clearAllData() {
   // PostgREST는 필터 없는 delete를 거부한다. id는 항상 비어있지 않으므로 전체 삭제와 같다.
   const results = await Promise.all([
     supabase.from("budget").delete().neq("id", ""),
     supabase.from("financial_products").delete().neq("id", ""),
     supabase.from("loans").delete().neq("id", ""),
+    supabase.from("installments").delete().neq("id", ""),
   ]);
   const failure = results.find((result) => result.error)?.error;
   if (failure) throw failure;

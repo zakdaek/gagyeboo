@@ -21,6 +21,7 @@ import type {
   DurationUnit,
   FinancialProduct,
   IncomeOwner,
+  Installment,
   InterestType,
   LedgerRecord,
   Loan,
@@ -39,7 +40,9 @@ import {
   migrateLegacyLocalData,
   saveBudgetRecord,
   saveFinancialProduct,
+  saveInstallment,
   saveLoanRecord,
+  deleteInstallment,
 } from "@/lib/store";
 
 const categories = {
@@ -67,16 +70,18 @@ const APPTECH_ADJUSTMENT_TITLE = "앱테크 누적금액 수정";
 const pageInfo: Record<PageKey, { title: string; eyebrow: string; href: string }> = {
   overview: { title: "이번 달 살림", eyebrow: "우리 집 돈의 흐름", href: "/" },
   ledger: { title: "수입·지출 관리", eyebrow: "내역 · 출장비 · 월간 통계", href: "/ledger" },
+  installments: { title: "할부 관리", eyebrow: "카드 할부와 남은 납부금", href: "/installments" },
   loans: { title: "대출 관리", eyebrow: "빌린 돈과 상환 흐름", href: "/loans" },
   savings: { title: "적금·예금", eyebrow: "모으는 돈과 만기 예상", href: "/savings" },
   cash: { title: "현금 모으기", eyebrow: "수입 대비 지출 분석과 실행 플랜", href: "/cash" },
 };
 
 const navItems: Array<{ page: PageKey; label: string; mobileLabel: string; icon: string }> = [
-  { page: "overview", label: "한눈에 보기", mobileLabel: "한눈에", icon: "▦" },
   { page: "ledger", label: "수입·지출·통계", mobileLabel: "내역·통계", icon: "≡" },
+  { page: "installments", label: "할부 관리", mobileLabel: "할부", icon: "◫" },
   { page: "loans", label: "대출 관리", mobileLabel: "대출", icon: "₩" },
   { page: "savings", label: "적금·예금 계산", mobileLabel: "적금·예금", icon: "◇" },
+  { page: "overview", label: "한눈에 보기", mobileLabel: "한눈에", icon: "▦" },
   { page: "cash", label: "현금 모으기 분석", mobileLabel: "현금 분석", icon: "◎" },
 ];
 
@@ -181,6 +186,16 @@ type LoanFormState = {
   method: RepaymentMethod;
 };
 
+type InstallmentFormState = {
+  name: string;
+  cardName: string;
+  totalAmount: string;
+  months: string;
+  paidMonths: string;
+  startDate: string;
+  paymentDay: string;
+};
+
 type RecordEditState = {
   id: string;
   type: "income" | "expense";
@@ -213,6 +228,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const [records, setRecords] = useState<LedgerRecord[]>([]);
   const [financialProducts, setFinancialProducts] = useState<FinancialProduct[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [installments, setInstallments] = useState<Installment[]>([]);
   const [viewDate, setViewDate] = useState<Date>(placeholderDate);
   const [typeFilter, setTypeFilter] = useState("all");
   const [toast, setToast] = useState("");
@@ -288,6 +304,17 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const [repaidPrincipal, setRepaidPrincipal] = useState("");
   const [repaidInterest, setRepaidInterest] = useState("");
 
+  const [editingInstallmentId, setEditingInstallmentId] = useState("");
+  const [installmentForm, setInstallmentForm] = useState<InstallmentFormState>({
+    name: "",
+    cardName: "",
+    totalAmount: "",
+    months: "12",
+    paidMonths: "0",
+    startDate: "2000-01-01",
+    paymentDay: "1",
+  });
+
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
 
@@ -305,6 +332,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
         setRecords(data.records);
         setFinancialProducts(data.financialProducts);
         setLoans(data.loans);
+        setInstallments(data.installments);
       } catch (error) {
         console.error(error);
         if (!cancelled) setLoadError(errorMessage(error));
@@ -325,6 +353,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     setFixedForm((form) => ({ ...form, date, repeatStart: month, repeatEnd: month }));
     setProductForm((form) => ({ ...form, startDate: date }));
     setLoanForm((form) => ({ ...form, startDate: date }));
+    setInstallmentForm((form) => ({ ...form, startDate: date }));
     setRepaymentDate(date);
 
     return () => {
@@ -417,6 +446,14 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const variable = expense - fixed;
   const balance = income - expense;
   const maxCost = Math.max(fixed, variable, 1);
+  const installmentTotal = installments.reduce((sum, item) => sum + item.totalAmount, 0);
+  const installmentRemaining = installments.reduce(
+    (sum, item) => sum + Math.max(0, item.totalAmount - item.monthlyAmount * item.paidMonths),
+    0,
+  );
+  const installmentMonthly = installments
+    .filter((item) => item.paidMonths < item.months)
+    .reduce((sum, item) => sum + item.monthlyAmount, 0);
 
   const tripExpense = expenses.filter((record) => record.category === "출장비 지출").reduce((sum, record) => sum + record.amount, 0);
   const tripIncome = currentRecords
@@ -478,11 +515,12 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const showContent = initialPage === "overview" || initialPage === "ledger";
   const showOverviewOnly = initialPage === "overview";
   const showStatistics = initialPage === "overview" || initialPage === "ledger";
+  const showInstallments = initialPage === "overview" || initialPage === "installments";
   const showLoans = initialPage === "overview" || initialPage === "loans";
   const showSavings = initialPage === "overview" || initialPage === "savings";
   const showCash = initialPage === "overview" || initialPage === "cash";
   const showData = initialPage === "overview";
-  const showMonthControl = initialPage !== "loans" && initialPage !== "savings";
+  const showMonthControl = initialPage !== "loans" && initialPage !== "savings" && initialPage !== "installments";
 
   const page = pageInfo[initialPage];
 
@@ -520,6 +558,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
         setRecords(data.records);
         setFinancialProducts(data.financialProducts);
         setLoans(data.loans);
+        setInstallments(data.installments);
       } catch (reloadError) {
         console.error(reloadError);
       }
@@ -910,6 +949,60 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     showToast(wasEditing ? "대출 정보를 수정했어요." : "대출을 등록했어요.");
   };
 
+  const resetInstallmentForm = () => {
+    setEditingInstallmentId("");
+    setInstallmentForm({
+      name: "",
+      cardName: "",
+      totalAmount: "",
+      months: "12",
+      paidMonths: "0",
+      startDate: formatLocalDate(new Date()),
+      paymentDay: "1",
+    });
+  };
+
+  const saveInstallmentEntry = (event: FormEvent) => {
+    event.preventDefault();
+    const months = Math.max(1, Math.floor(Number(installmentForm.months) || 0));
+    const paidMonths = Math.min(months, Math.max(0, Math.floor(Number(installmentForm.paidMonths) || 0)));
+    const totalAmount = Number(installmentForm.totalAmount);
+    if (!installmentForm.name.trim() || !totalAmount || totalAmount <= 0) return;
+    const installment: Installment = {
+      id: editingInstallmentId || uid(),
+      name: installmentForm.name.trim(),
+      cardName: installmentForm.cardName.trim(),
+      totalAmount,
+      monthlyAmount: totalAmount / months,
+      months,
+      paidMonths,
+      startDate: installmentForm.startDate,
+      paymentDay: Math.min(31, Math.max(1, Math.floor(Number(installmentForm.paymentDay) || 1))),
+      createdAt: installments.find((item) => item.id === editingInstallmentId)?.createdAt || Date.now(),
+    };
+    setInstallments((items) => editingInstallmentId ? items.map((item) => item.id === installment.id ? installment : item) : [...items, installment]);
+    void persist(() => saveInstallment(installment), "할부 정보를 저장하지 못했어요.");
+    const wasEditing = Boolean(editingInstallmentId);
+    resetInstallmentForm();
+    showToast(wasEditing ? "할부 정보를 수정했어요." : "할부를 등록했어요.");
+  };
+
+  const editInstallment = (id: string) => {
+    const installment = installments.find((item) => item.id === id);
+    if (!installment) return;
+    setEditingInstallmentId(id);
+    setInstallmentForm({
+      name: installment.name,
+      cardName: installment.cardName,
+      totalAmount: String(installment.totalAmount),
+      months: String(installment.months),
+      paidMonths: String(installment.paidMonths),
+      startDate: installment.startDate,
+      paymentDay: String(installment.paymentDay),
+    });
+    window.setTimeout(() => document.getElementById("installmentForm")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
+
   const editLoan = (id: string) => {
     const loan = loans.find((item) => item.id === id);
     if (!loan) return;
@@ -1178,6 +1271,13 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                 <div className={`summary-value ${balance < 0 ? "negative" : ""}`}>{money(balance)}</div>
                 <div className="summary-caption">
                   {balance < 0 ? "이번 달 지출이 수입보다 많아요" : "수입에서 지출을 뺀 금액"}
+                </div>
+              </article>
+              <article className="summary-card installment-summary-card">
+                <div className="summary-label">남은 할부</div>
+                <div className="summary-value">{money(installmentRemaining)}</div>
+                <div className="summary-caption">
+                  {installments.length ? `매월 ${money(installmentMonthly)} · ${installments.length}건` : "등록된 할부가 없어요"}
                 </div>
               </article>
             </section>
@@ -1875,6 +1975,74 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                     )}
                   </div>
                 ))}
+              </div>
+            </section>
+          )}
+
+          {showInstallments && (
+            <section className="panel installment-panel" id="installments">
+              <div className="panel-header">
+                <div>
+                  <h2 className="panel-title">할부 관리</h2>
+                  <p className="panel-subtitle">카드 할부 금액과 남은 납부 회차를 한눈에 관리해요</p>
+                </div>
+                <div className="installment-overview">
+                  <div><span>남은 할부</span><strong>{money(installmentRemaining)}</strong></div>
+                  <div><span>이번 달 납부 예정</span><strong>{money(installmentMonthly)}</strong></div>
+                </div>
+              </div>
+              <div className="installment-layout">
+                <form id="installmentForm" className="installment-form" onSubmit={saveInstallmentEntry}>
+                  <div className="form-grid">
+                    <div className="field">
+                      <label htmlFor="installmentName">할부 내용</label>
+                      <input id="installmentName" type="text" maxLength={40} placeholder="예: 노트북" value={installmentForm.name} onChange={(event) => setInstallmentForm({ ...installmentForm, name: event.target.value })} required />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="installmentCard">카드·결제수단</label>
+                      <input id="installmentCard" type="text" maxLength={30} placeholder="예: 현대카드" value={installmentForm.cardName} onChange={(event) => setInstallmentForm({ ...installmentForm, cardName: event.target.value })} />
+                    </div>
+                    <div className="field full">
+                      <label htmlFor="installmentTotal">총 할부 금액</label>
+                      <input id="installmentTotal" type="number" min="1" step="1" placeholder="1200000" value={installmentForm.totalAmount} onChange={(event) => setInstallmentForm({ ...installmentForm, totalAmount: event.target.value })} required />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="installmentMonths">할부 기간</label>
+                      <input id="installmentMonths" type="number" min="1" max="120" step="1" value={installmentForm.months} onChange={(event) => setInstallmentForm({ ...installmentForm, months: event.target.value })} required />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="installmentPaidMonths">납부 완료 회차</label>
+                      <input id="installmentPaidMonths" type="number" min="0" step="1" value={installmentForm.paidMonths} onChange={(event) => setInstallmentForm({ ...installmentForm, paidMonths: event.target.value })} required />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="installmentStartDate">할부 시작일</label>
+                      <input id="installmentStartDate" type="date" value={installmentForm.startDate} onChange={(event) => setInstallmentForm({ ...installmentForm, startDate: event.target.value })} required />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="installmentPaymentDay">결제일</label>
+                      <input id="installmentPaymentDay" type="number" min="1" max="31" step="1" value={installmentForm.paymentDay} onChange={(event) => setInstallmentForm({ ...installmentForm, paymentDay: event.target.value })} required />
+                    </div>
+                  </div>
+                  <p className="form-note">월 납입액은 총 할부 금액을 할부 기간으로 나눠 자동 계산합니다.</p>
+                  <div className="modal-actions">
+                    {editingInstallmentId && <button type="button" className="secondary-btn" onClick={resetInstallmentForm}>수정 취소</button>}
+                    <button type="submit" className="primary-btn">{editingInstallmentId ? "할부 정보 수정" : "할부 등록"}</button>
+                  </div>
+                </form>
+                <div className="installment-list">
+                  <div className="panel-header"><div><h3 className="panel-title">등록한 할부</h3><p className="panel-subtitle">총 {installments.length}건 · 전체 {money(installmentTotal)}</p></div></div>
+                  {installments.length === 0 ? <div className="product-empty">관리할 할부를 등록해보세요.</div> : installments.slice().sort((a, b) => b.createdAt - a.createdAt).map((item) => {
+                    const remaining = Math.max(0, item.totalAmount - item.monthlyAmount * item.paidMonths);
+                    const progress = item.months ? Math.min(100, (item.paidMonths / item.months) * 100) : 0;
+                    return (
+                      <article className="installment-item" key={item.id}>
+                        <div className="installment-item-head"><div><strong>{item.name}</strong><span>{item.cardName || "결제수단 미입력"} · 매월 {money(item.monthlyAmount)} · {item.paymentDay}일 결제</span></div><b>{money(remaining)}</b></div>
+                        <div className="installment-track"><div style={{ width: `${progress}%` }} /></div>
+                        <div className="installment-item-foot"><span>{item.paidMonths}/{item.months}회 납부 · 남은 {money(remaining)}</span><div className="loan-actions"><button type="button" className="icon-btn" onClick={() => editInstallment(item.id)}>수정</button><button type="button" className="icon-btn" onClick={() => { if (window.confirm("이 할부를 삭제할까요?")) { setInstallments((items) => items.filter((current) => current.id !== item.id)); void persist(() => deleteInstallment(item.id), "할부를 삭제하지 못했어요."); showToast("할부를 삭제했어요."); } }}>삭제</button></div></div>
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             </section>
           )}

@@ -57,7 +57,7 @@
     .month-control button:hover { background: var(--paper); color: var(--ink); }
     #monthLabel { min-width: 105px; text-align: center; font-weight: 700; }
 
-    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 26px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 26px; }
     .summary-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 23px; position: relative; overflow: hidden; }
     .summary-card.balance { background: var(--green); color: white; border-color: var(--green); }
     .summary-label { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
@@ -272,6 +272,25 @@
     .apptech-repeat-toggle { margin: 0; }
     .apptech-repeat-toggle span { color: #9b5732; }
     .apptech-repeat-note { margin: -3px 0 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .installment-panel { margin-top: 20px; }
+    .installment-overview { display: flex; gap: 10px; }
+    .installment-overview div { padding: 10px 13px; border-radius: 12px; background: var(--green-soft); color: var(--green-deep); }
+    .installment-overview span, .installment-overview strong { display: block; }
+    .installment-overview span { font-size: 10px; margin-bottom: 4px; }
+    .installment-overview strong { font-size: 16px; }
+    .installment-layout { display: grid; grid-template-columns: minmax(320px, .8fr) minmax(0, 1.2fr); gap: 28px; align-items: start; }
+    .installment-form { padding: 17px; border: 1px solid var(--line); border-radius: 15px; background: var(--paper); }
+    .installment-list { min-width: 0; }
+    .installment-item { padding: 15px 0; border-bottom: 1px solid var(--line); }
+    .installment-item:first-of-type { border-top: 1px solid var(--line); }
+    .installment-item-head, .installment-item-foot { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+    .installment-item-head strong, .installment-item-head span { display: block; }
+    .installment-item-head strong { font-size: 14px; }
+    .installment-item-head span, .installment-item-foot span { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .installment-item-head b { color: var(--green-deep); white-space: nowrap; }
+    .installment-track { height: 7px; margin: 12px 0 8px; border-radius: 99px; background: #edf0eb; overflow: hidden; }
+    .installment-track div { height: 100%; border-radius: inherit; background: var(--green); }
+    .installment-item-foot { align-items: baseline; }
     .apptech-history { min-width: 0; }
     .apptech-history-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid #f0dfc9; }
     .apptech-history-head strong { font-size: 14px; }
@@ -364,15 +383,23 @@
     body[data-page="loans"] .summary-grid,
     body[data-page="savings"] .summary-grid,
     body[data-page="cash"] .summary-grid { display: none; }
+    body[data-page="installments"] .content-grid,
+    body[data-page="installments"] .statistics-panel,
+    body[data-page="installments"] .loan-panel,
+    body[data-page="installments"] .savings-panel,
+    body[data-page="installments"] .cash-analysis-panel,
+    body[data-page="installments"] .data-panel,
+    body[data-page="installments"] .summary-grid { display: none; }
     body[data-page="loans"] .month-control,
     body[data-page="savings"] .month-control { display: none; }
 
     @media (max-width: 960px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .shell { grid-template-columns: 1fr; }
       .sidebar { display: none; }
       main { padding-bottom: 92px; }
       .content-grid { grid-template-columns: 1fr; }
-      .mobile-bar { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 10; left: 14px; right: 14px; bottom: 14px; background: var(--ink); border-radius: 18px; padding: 7px; box-shadow: var(--shadow); }
+      .mobile-bar { display: grid; grid-template-columns: repeat(6, 1fr); position: fixed; z-index: 10; left: 14px; right: 14px; bottom: 14px; background: var(--ink); border-radius: 18px; padding: 7px; box-shadow: var(--shadow); }
       .mobile-bar button { border: 0; background: transparent; color: rgba(255,255,255,.65); padding: 9px 4px; font-size: 11px; border-radius: 12px; }
       .mobile-bar button.active { color: white; background: rgba(255,255,255,.1); }
     }
@@ -392,6 +419,9 @@
       .statistics-grid { grid-template-columns: 1fr; }
       .loan-layout { grid-template-columns: 1fr; }
       .cash-analysis-grid { grid-template-columns: 1fr; }
+      .installment-layout { grid-template-columns: 1fr; }
+      .installment-overview { width: 100%; }
+      .installment-overview div { flex: 1; }
       .apptech-layout { grid-template-columns: 1fr; }
       .apptech-panel .panel-header { flex-direction: column; }
       .apptech-total { width: 100%; text-align: left; }
@@ -419,6 +449,7 @@
       .cash-plan-amount { grid-column: 2; text-align: left; }
       .plan-detail { grid-template-columns: 50px minmax(0, 1fr); }
       .modal { padding: 22px 18px; }
+      .installment-panel .panel-header { flex-direction: column; }
     }
 
 /* React/App Router 전환용 보완 스타일 */
