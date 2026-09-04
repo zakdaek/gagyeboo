@@ -62,6 +62,8 @@ const categories = {
   income: ["월급", "회사 출장비 지급", "부수입", "앱테크 수입", "기타 수입"],
 } as const;
 
+const APPTECH_ADJUSTMENT_TITLE = "앱테크 누적금액 수정";
+
 const pageInfo: Record<PageKey, { title: string; eyebrow: string; href: string }> = {
   overview: { title: "이번 달 살림", eyebrow: "우리 집 돈의 흐름", href: "/" },
   ledger: { title: "수입·지출 관리", eyebrow: "내역 · 출장비 · 월간 통계", href: "/ledger" },
@@ -228,6 +230,8 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     title: "",
     repeatForever: false,
   });
+  const [editingAppTechTotal, setEditingAppTechTotal] = useState(false);
+  const [appTechTotalForm, setAppTechTotalForm] = useState("");
   const [fixedForm, setFixedForm] = useState<QuickExpenseForm>({
     date: "2000-01-01",
     amount: "",
@@ -345,6 +349,8 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     const key = monthKey(date);
     setIncomeForm({ date: quickDate, amount: "", title: "", category: categories.income[0], owner: "me" });
     setAppTechForm({ date: quickDate, amount: "", title: "", repeatForever: false });
+    setEditingAppTechTotal(false);
+    setAppTechTotalForm("");
     setVariableForm({
       date: quickDate,
       amount: "",
@@ -424,9 +430,13 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const sideIncome = currentRecords
     .filter((record) => record.type === "income" && record.category === "부수입")
     .reduce((sum, record) => sum + record.amount, 0);
-  const appTechIncome = currentRecords
-    .filter((record) => record.type === "income" && record.category === "앱테크 수입")
+  const appTechRecords = currentRecords.filter((record) => record.type === "income" && record.category === "앱테크 수입");
+  const appTechBaseIncome = appTechRecords
+    .filter((record) => record.title !== APPTECH_ADJUSTMENT_TITLE)
     .reduce((sum, record) => sum + record.amount, 0);
+  const appTechIncome = appTechRecords
+    .reduce((sum, record) => sum + record.amount, 0);
+  const appTechAdjustment = appTechRecords.find((record) => record.title === APPTECH_ADJUSTMENT_TITLE);
 
   const filteredRecords = useMemo(() => {
     let items = [...currentRecords];
@@ -548,6 +558,48 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     void persist(() => saveBudgetRecord(record), "앱테크 수입을 저장하지 못했어요.");
     setAppTechForm({ date: quickEntryDate(), amount: "", title: "", repeatForever: false });
     showToast("앱테크 수입을 저장했어요.");
+  };
+
+  const saveAppTechTotal = (event: FormEvent) => {
+    event.preventDefault();
+    const targetAmount = Number(appTechTotalForm);
+    if (!Number.isFinite(targetAmount) || targetAmount < 0) return;
+
+    const adjustmentAmount = targetAmount - appTechBaseIncome;
+    if (adjustmentAmount === 0) {
+      if (appTechAdjustment) {
+        setRecords((items) => items.filter((record) => record.id !== appTechAdjustment.id));
+        void persist(() => deleteBudgetRecord(appTechAdjustment.id), "앱테크 누적금액 수정을 저장하지 못했어요.");
+      }
+    } else {
+      const adjustmentRecord: LedgerRecord = appTechAdjustment
+        ? { ...appTechAdjustment, amount: adjustmentAmount }
+        : {
+            id: uid(),
+            type: "income",
+            date: `${monthKey(viewDate)}-01`,
+            title: APPTECH_ADJUSTMENT_TITLE,
+            amount: adjustmentAmount,
+            category: "앱테크 수입",
+            subcategory: "",
+            costType: "",
+            paymentMethod: "",
+            repeatStart: "",
+            repeatEnd: "",
+            repeatForever: false,
+            owner: "me",
+            createdAt: Date.now(),
+          };
+      setRecords((items) => {
+        const existingIndex = items.findIndex((record) => record.id === adjustmentRecord.id);
+        if (existingIndex < 0) return [...items, adjustmentRecord];
+        return items.map((record) => (record.id === adjustmentRecord.id ? adjustmentRecord : record));
+      });
+      void persist(() => saveBudgetRecord(adjustmentRecord), "앱테크 누적금액 수정을 저장하지 못했어요.");
+    }
+    setEditingAppTechTotal(false);
+    setAppTechTotalForm("");
+    showToast("앱테크 누적금액을 수정했어요.");
   };
 
   const saveFixed = (event: FormEvent) => {
@@ -1517,7 +1569,34 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                     </div>
                     <div className="apptech-total">
                       <span>이번 달 합계</span>
-                      <strong>{money(appTechIncome)}</strong>
+                      {editingAppTechTotal ? (
+                        <form className="apptech-total-edit" onSubmit={saveAppTechTotal}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            aria-label="이번 달 앱테크 누적금액"
+                            value={appTechTotalForm}
+                            onChange={(event) => setAppTechTotalForm(event.target.value)}
+                            autoFocus
+                          />
+                          <div>
+                            <button type="submit">저장</button>
+                            <button type="button" onClick={() => { setEditingAppTechTotal(false); setAppTechTotalForm(""); }}>취소</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <strong>{money(appTechIncome)}</strong>
+                          <button
+                            type="button"
+                            className="apptech-edit-btn"
+                            onClick={() => { setAppTechTotalForm(String(appTechIncome)); setEditingAppTechTotal(true); }}
+                          >
+                            수정
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="apptech-layout">

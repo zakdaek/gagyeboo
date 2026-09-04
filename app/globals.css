@@ -259,6 +259,12 @@
     .apptech-total { flex: 0 0 auto; padding: 10px 13px; border-radius: 12px; background: #fff0dc; color: #9b5732; text-align: right; }
     .apptech-total span { display: block; font-size: 10px; margin-bottom: 4px; }
     .apptech-total strong { display: block; font-size: 17px; }
+    .apptech-edit-btn { margin-top: 7px; padding: 4px 8px; border: 1px solid #e8cba9; border-radius: 7px; background: rgba(255,255,255,.7); color: #9b5732; font-size: 10px; }
+    .apptech-total-edit { display: grid; gap: 7px; }
+    .apptech-total-edit input { width: 150px; padding: 7px 8px; border-color: #e8cba9; font-size: 14px; font-weight: 700; }
+    .apptech-total-edit div { display: flex; gap: 6px; }
+    .apptech-total-edit button { padding: 5px 8px; border: 0; border-radius: 7px; background: #9b5732; color: white; font-size: 10px; }
+    .apptech-total-edit button[type="button"] { background: rgba(255,255,255,.75); color: #9b5732; border: 1px solid #e8cba9; }
     .apptech-layout { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.2fr); gap: 28px; align-items: start; }
     .apptech-form { padding: 17px; border: 1px solid #f0dfc9; border-radius: 15px; background: rgba(255,255,255,.72); }
     .apptech-form .primary-btn { background: #9b5732; }
