@@ -427,9 +427,6 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const appTechIncome = currentRecords
     .filter((record) => record.type === "income" && record.category === "앱테크 수입")
     .reduce((sum, record) => sum + record.amount, 0);
-  const appTechRows = currentRecords
-    .filter((record) => record.type === "income" && record.category === "앱테크 수입")
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 
   const filteredRecords = useMemo(() => {
     let items = [...currentRecords];
@@ -1576,21 +1573,19 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                     </form>
                     <div className="apptech-history">
                       <div className="apptech-history-head">
-                        <strong>이번 달 기록</strong>
-                        <span>{appTechRows.length}건</span>
+                        <strong>월별 누적 기록</strong>
+                        <span>건별 합산</span>
                       </div>
-                      {appTechRows.length === 0 ? (
+                      {!appTechIncome ? (
                         <div className="apptech-empty">아직 기록이 없어요. 오늘 번 금액부터 남겨보세요.</div>
                       ) : (
-                        appTechRows.map((record) => (
-                          <div className="apptech-row" key={record.id}>
-                            <div>
-                              <strong>{record.title}</strong>
-                              <span>{record.date.replaceAll("-", ".")}{record.isRecurring ? " · 매월 반복" : ""}</span>
-                            </div>
-                            <b>+{money(record.amount)}</b>
+                        <div className="apptech-row">
+                          <div>
+                            <strong>{String(viewDate.getFullYear()).slice(2)}년 {viewDate.getMonth() + 1}월</strong>
+                            <span>이번 달 앱테크 수입 누적</span>
                           </div>
-                        ))
+                          <b>+{money(appTechIncome)}</b>
+                        </div>
                       )}
                     </div>
                   </div>
