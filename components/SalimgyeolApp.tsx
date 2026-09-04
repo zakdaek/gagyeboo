@@ -447,8 +447,26 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     if (typeFilter === "trip") {
       items = items.filter((record) => ["출장비 지출", "회사 출장비 지급"].includes(record.category));
     }
+    const appTechItems = items.filter((record) => record.type === "income" && record.category === "앱테크 수입");
+    if (appTechItems.length > 0) {
+      const appTechTotal = appTechItems.reduce((sum, record) => sum + record.amount, 0);
+      items = [
+        ...items.filter((record) => !(record.type === "income" && record.category === "앱테크 수입")),
+        {
+          ...appTechItems[0],
+          id: `apptech-month-${monthKey(viewDate)}`,
+          date: `${monthKey(viewDate)}-01`,
+          title: `${String(viewDate.getFullYear()).slice(2)}년 ${viewDate.getMonth() + 1}월 앱테크 수입`,
+          amount: appTechTotal,
+          repeatStart: "",
+          repeatEnd: "",
+          repeatForever: false,
+          isRecurring: false,
+        },
+      ];
+    }
     return items.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-  }, [currentRecords, typeFilter]);
+  }, [currentRecords, typeFilter, viewDate]);
 
   const categoryEntries = useMemo(() => aggregate(expenses, (record) => record.category || "기타 지출"), [expenses]);
   const paymentEntries = useMemo(
@@ -1763,6 +1781,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                                 {money(record.amount)}
                               </td>
                               <td className="row-actions">
+                                {!record.id.startsWith("apptech-month-") && <span className="apptech-row-actions">
                                 <button type="button" className="icon-btn" onClick={() => openRecordEdit(record.id)}>
                                   수정
                                 </button>
@@ -1779,6 +1798,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                                 >
                                   삭제
                                 </button>
+                                </span>}
                               </td>
                             </tr>
                           ))}
