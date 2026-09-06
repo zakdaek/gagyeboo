@@ -156,6 +156,27 @@
     .rate-history-row span { color: var(--muted); }
 
     .statistics-panel { margin-top: 20px; }
+    .calendar-panel { margin-top: 20px; }
+    .calendar-header { align-items: flex-start; }
+    .calendar-legend { display: flex; flex-wrap: wrap; gap: 10px 14px; color: var(--muted); font-size: 11px; }
+    .calendar-legend span { display: inline-flex; align-items: center; white-space: nowrap; }
+    .calendar-legend .legend-dot { margin-right: 5px; }
+    .calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .calendar-weekdays { margin-top: 4px; border-bottom: 1px solid var(--line); }
+    .calendar-weekdays span { padding: 9px 8px; color: var(--muted); font-size: 11px; font-weight: 700; text-align: right; }
+    .calendar-weekdays span:last-child { color: var(--red); }
+    .calendar-grid { border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+    .calendar-cell { min-height: 126px; padding: 9px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); overflow: hidden; }
+    .calendar-cell.is-empty { background: var(--paper); }
+    .calendar-cell time { display: block; color: var(--ink); font-size: 12px; font-weight: 700; text-align: right; }
+    .calendar-amounts { display: grid; gap: 2px; margin-top: 7px; font-size: 10px; font-weight: 700; text-align: right; }
+    .calendar-income { color: var(--green-deep); }
+    .calendar-expense { color: var(--red); }
+    .calendar-records { display: grid; gap: 4px; margin-top: 7px; }
+    .calendar-record { display: block; min-width: 0; padding: 4px 5px; border-radius: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; line-height: 1.25; }
+    .calendar-record b { font-weight: 700; }
+    .calendar-record.income { background: var(--green-soft); color: var(--green-deep); }
+    .calendar-record.expense { background: var(--orange-soft); color: #9b5732; }
     .statistics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
     .statistics-group h3 { margin: 0 0 5px; font-size: 16px; }
     .statistics-group > p { margin: 0 0 20px; color: var(--muted); font-size: 11px; }
@@ -220,6 +241,7 @@
 
     .cash-analysis-panel { margin-top: 20px; }
     .cash-analysis-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 24px; align-items: start; }
+    .cash-analysis-grid > * { min-width: 0; }
     .cash-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
     .cash-metric { padding: 16px; border: 1px solid var(--line); border-radius: 15px; background: var(--paper); }
     .cash-metric span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
@@ -238,12 +260,13 @@
     .cash-plan-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 11px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--line); }
     .cash-plan-item:first-child { border-top: 1px solid var(--line); }
     .plan-number { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 10px; background: var(--green-soft); color: var(--green-deep); font-size: 12px; font-weight: 700; }
+    .cash-plan-copy { min-width: 0; overflow-wrap: anywhere; }
     .cash-plan-copy strong { display: block; font-size: 13px; }
     .cash-plan-copy > span { display: block; color: var(--muted); font-size: 11px; line-height: 1.55; margin-top: 5px; }
     .plan-details { display: grid; gap: 6px; margin-top: 9px; }
     .plan-detail { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; color: var(--muted); font-size: 11px; line-height: 1.55; }
     .plan-detail b { color: var(--green-deep); font-size: 10px; font-weight: 700; }
-    .cash-plan-amount { white-space: nowrap; text-align: right; font-size: 13px; font-weight: 700; }
+    .cash-plan-amount { max-width: 140px; white-space: normal; overflow-wrap: anywhere; text-align: right; font-size: 13px; font-weight: 700; }
     .analysis-note { margin: 15px 0 0; padding: 11px 13px; border-radius: 11px; background: var(--paper); color: var(--muted); font-size: 10px; line-height: 1.6; }
 
     .transactions-panel { margin-top: 20px; }
@@ -447,6 +470,11 @@
       .loan-item-foot { align-items: flex-start; flex-direction: column; }
       .cash-plan-item { grid-template-columns: 34px 1fr; }
       .cash-plan-amount { grid-column: 2; text-align: left; }
+      .calendar-cell { min-height: 102px; padding: 7px 5px; }
+      .calendar-weekdays span { padding: 8px 5px; font-size: 10px; }
+      .calendar-cell time { font-size: 11px; }
+      .calendar-amounts { font-size: 9px; }
+      .calendar-record { padding: 3px 4px; font-size: 9px; }
       .plan-detail { grid-template-columns: 50px minmax(0, 1fr); }
       .modal { padding: 22px 18px; }
       .installment-panel .panel-header { flex-direction: column; }

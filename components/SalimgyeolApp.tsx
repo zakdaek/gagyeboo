@@ -511,15 +511,40 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     [expenses],
   );
 
+  const calendarDays = useMemo(() => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    // Monday-first calendar: Sunday (0) becomes the final column.
+    const leadingDays = (firstDay.getDay() + 6) % 7;
+    const totalCells = Math.ceil((leadingDays + daysInMonth) / 7) * 7;
+    const recordsByDate = new Map<string, LedgerRecord[]>();
+
+    currentRecords.forEach((record) => {
+      const items = recordsByDate.get(record.date) || [];
+      items.push(record);
+      recordsByDate.set(record.date, items);
+    });
+
+    return Array.from({ length: totalCells }, (_, index) => {
+      const dayNumber = index - leadingDays + 1;
+      if (dayNumber < 1 || dayNumber > daysInMonth) return { date: "", dayNumber: 0, records: [] };
+      const date = `${monthKey(viewDate)}-${String(dayNumber).padStart(2, "0")}`;
+      return { date, dayNumber, records: recordsByDate.get(date) || [] };
+    });
+  }, [currentRecords, viewDate]);
+
   const showSummary = initialPage === "overview" || initialPage === "ledger";
-  const showContent = initialPage === "overview" || initialPage === "ledger";
+  const showCalendar = initialPage === "overview";
+  const showContent = initialPage === "ledger";
   const showOverviewOnly = initialPage === "overview";
-  const showStatistics = initialPage === "overview" || initialPage === "ledger";
-  const showInstallments = initialPage === "overview" || initialPage === "installments";
-  const showLoans = initialPage === "overview" || initialPage === "loans";
-  const showSavings = initialPage === "overview" || initialPage === "savings";
-  const showCash = initialPage === "overview" || initialPage === "cash";
-  const showData = initialPage === "overview";
+  const showStatistics = initialPage === "ledger";
+  const showInstallments = initialPage === "installments";
+  const showLoans = initialPage === "loans";
+  const showSavings = initialPage === "savings";
+  const showCash = initialPage === "cash";
+  const showData = false;
   const showMonthControl = initialPage !== "loans" && initialPage !== "savings" && initialPage !== "installments";
 
   const page = pageInfo[initialPage];
@@ -1280,6 +1305,50 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                   {installments.length ? `매월 ${money(installmentMonthly)} · ${installments.length}건` : "등록된 할부가 없어요"}
                 </div>
               </article>
+            </section>
+          )}
+
+          {showCalendar && (
+            <section className="panel calendar-panel" aria-labelledby="calendarTitle">
+              <div className="panel-header calendar-header">
+                <div>
+                  <h2 className="panel-title" id="calendarTitle">월간 수입·지출 달력</h2>
+                  <p className="panel-subtitle">날짜별로 어떤 항목이 들어오고 나갔는지 한눈에 확인해요</p>
+                </div>
+                <div className="calendar-legend" aria-label="수입과 지출 범례">
+                  <span><i className="legend-dot income" />수입</span>
+                  <span><i className="legend-dot expense" />지출</span>
+                </div>
+              </div>
+              <div className="calendar-weekdays" aria-hidden="true">
+                {['월', '화', '수', '목', '금', '토', '일'].map((weekday) => <span key={weekday}>{weekday}</span>)}
+              </div>
+              <div className="calendar-grid">
+                {calendarDays.map((cell, index) => {
+                  const dayIncome = cell.records.filter((record) => record.type === "income").reduce((sum, record) => sum + record.amount, 0);
+                  const dayExpense = cell.records.filter((record) => record.type === "expense").reduce((sum, record) => sum + record.amount, 0);
+                  return (
+                    <div className={`calendar-cell ${cell.date ? "" : "is-empty"}`} key={cell.date || `empty-${index}`}>
+                      {cell.date && (
+                        <>
+                          <time dateTime={cell.date}>{cell.dayNumber}</time>
+                          <div className="calendar-amounts">
+                            {dayIncome > 0 && <span className="calendar-income">+{money(dayIncome)}</span>}
+                            {dayExpense > 0 && <span className="calendar-expense">−{money(dayExpense)}</span>}
+                          </div>
+                          <div className="calendar-records">
+                            {cell.records.map((record) => (
+                              <span className={record.type === "income" ? "calendar-record income" : "calendar-record expense"} key={record.id} title={`${record.title} ${money(record.amount)}`}>
+                                {record.title} <b>{money(record.amount)}</b>
+                              </span>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </section>
           )}
 
