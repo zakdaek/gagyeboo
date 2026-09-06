@@ -516,8 +516,8 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     const month = viewDate.getMonth();
     const firstDay = new Date(year, month, 1);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    // Monday-first calendar: Sunday (0) becomes the final column.
-    const leadingDays = (firstDay.getDay() + 6) % 7;
+    // Sunday-first calendar: JavaScript's Sunday=0 matches the first column.
+    const leadingDays = firstDay.getDay();
     const totalCells = Math.ceil((leadingDays + daysInMonth) / 7) * 7;
     const recordsByDate = new Map<string, LedgerRecord[]>();
 
@@ -1321,7 +1321,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                 </div>
               </div>
               <div className="calendar-weekdays" aria-hidden="true">
-                {['월', '화', '수', '목', '금', '토', '일'].map((weekday) => <span key={weekday}>{weekday}</span>)}
+                {['일', '월', '화', '수', '목', '금', '토'].map((weekday) => <span key={weekday}>{weekday}</span>)}
               </div>
               <div className="calendar-grid">
                 {calendarDays.map((cell, index) => {

@@ -164,7 +164,7 @@
     .calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
     .calendar-weekdays { margin-top: 4px; border-bottom: 1px solid var(--line); }
     .calendar-weekdays span { padding: 9px 8px; color: var(--muted); font-size: 11px; font-weight: 700; text-align: right; }
-    .calendar-weekdays span:last-child { color: var(--red); }
+    .calendar-weekdays span:first-child { color: var(--red); }
     .calendar-grid { border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
     .calendar-cell { min-height: 126px; padding: 9px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); overflow: hidden; }
     .calendar-cell.is-empty { background: var(--paper); }
