@@ -1,4 +1,4 @@
-export type PageKey = "overview" | "ledger" | "installments" | "loans" | "savings" | "cash";
+export type PageKey = "overview" | "ledger" | "installments" | "loans" | "savings" | "cash" | "admin";
 export type RecordType = "income" | "expense";
 export type CostType = "fixed" | "variable" | "";
 // `creditCard` is kept for records created before cards were split by issuer.

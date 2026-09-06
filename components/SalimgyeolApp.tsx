@@ -45,7 +45,10 @@ import {
   deleteInstallment,
 } from "@/lib/store";
 
-const categories = {
+type CategoryGroup = "income" | "expense" | "appTech";
+type CategorySettings = Record<CategoryGroup, string[]>;
+
+const defaultCategories: CategorySettings = {
   expense: [
     "식비",
     "주거·공과금",
@@ -63,7 +66,31 @@ const categories = {
     "기타 지출",
   ],
   income: ["월급", "회사 출장비 지급", "부수입", "앱테크 수입", "기타 수입"],
-} as const;
+  appTech: ["카카오페이 이자", "카카오뱅크", "케이뱅크"],
+};
+
+const CATEGORY_SETTINGS_KEY = "salimgyeol-category-settings-v1";
+
+function readCategorySettings(): CategorySettings {
+  if (typeof window === "undefined") return defaultCategories;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CATEGORY_SETTINGS_KEY) || "null") as Partial<CategorySettings> | null;
+    if (!parsed) return defaultCategories;
+    return {
+      income: Array.isArray(parsed.income) && parsed.income.length ? parsed.income.filter(Boolean) : defaultCategories.income,
+      expense: Array.isArray(parsed.expense) && parsed.expense.length ? parsed.expense.filter(Boolean) : defaultCategories.expense,
+      appTech: Array.isArray(parsed.appTech) && parsed.appTech.length ? parsed.appTech.filter(Boolean) : defaultCategories.appTech,
+    };
+  } catch {
+    return defaultCategories;
+  }
+}
+
+const categoryAdminItems: Array<{ group: CategoryGroup; title: string; description: string }> = [
+  { group: "income", title: "수입 분류", description: "수입 입력에 사용할 분류를 관리해요." },
+  { group: "expense", title: "지출 분류", description: "고정·변동 지출 입력에 사용할 분류를 관리해요." },
+  { group: "appTech", title: "앱테크 활동명", description: "앱테크 입력에서 선택할 앱 또는 활동명을 관리해요." },
+];
 
 const APPTECH_ADJUSTMENT_TITLE = "앱테크 누적금액 수정";
 
@@ -74,6 +101,7 @@ const pageInfo: Record<PageKey, { title: string; eyebrow: string; href: string }
   loans: { title: "대출 관리", eyebrow: "빌린 돈과 상환 흐름", href: "/loans" },
   savings: { title: "적금·예금", eyebrow: "모으는 돈과 만기 예상", href: "/savings" },
   cash: { title: "현금 모으기", eyebrow: "수입 대비 지출 분석과 실행 플랜", href: "/cash" },
+  admin: { title: "관리자 페이지", eyebrow: "가계부 분류와 앱테크 카테고리 관리", href: "/admin" },
 };
 
 const navItems: Array<{ page: PageKey; label: string; mobileLabel: string; icon: string }> = [
@@ -83,6 +111,7 @@ const navItems: Array<{ page: PageKey; label: string; mobileLabel: string; icon:
   { page: "savings", label: "적금·예금 계산", mobileLabel: "적금·예금", icon: "◇" },
   { page: "overview", label: "한눈에 보기", mobileLabel: "한눈에", icon: "▦" },
   { page: "cash", label: "현금 모으기 분석", mobileLabel: "현금 분석", icon: "◎" },
+  { page: "admin", label: "관리자 페이지", mobileLabel: "관리자", icon: "⚙" },
 ];
 
 const chartColors = [
@@ -147,7 +176,7 @@ type QuickIncomeForm = {
 type AppTechForm = {
   date: string;
   amount: string;
-  title: string;
+  category: string;
   repeatForever: boolean;
 };
 
@@ -225,6 +254,9 @@ function placeholderDate() {
 export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey }) {
   const [hydrated, setHydrated] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [categories, setCategories] = useState<CategorySettings>(defaultCategories);
+  const [newCategoryName, setNewCategoryName] = useState<Record<CategoryGroup, string>>({ income: "", expense: "", appTech: "" });
+  const [editingCategory, setEditingCategory] = useState<{ group: CategoryGroup; index: number; name: string } | null>(null);
   const [records, setRecords] = useState<LedgerRecord[]>([]);
   const [financialProducts, setFinancialProducts] = useState<FinancialProduct[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -243,7 +275,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const [appTechForm, setAppTechForm] = useState<AppTechForm>({
     date: "2000-01-01",
     amount: "",
-    title: "",
+    category: defaultCategories.appTech[0],
     repeatForever: false,
   });
   const [editingAppTechTotal, setEditingAppTechTotal] = useState(false);
@@ -323,6 +355,12 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
 
     const load = async () => {
       try {
+        const savedCategories = readCategorySettings();
+        setCategories(savedCategories);
+        setIncomeForm((form) => ({ ...form, category: savedCategories.income.includes(form.category) ? form.category : savedCategories.income[0] }));
+        setFixedForm((form) => ({ ...form, category: savedCategories.expense.includes(form.category) ? form.category : savedCategories.expense[0] }));
+        setVariableForm((form) => ({ ...form, category: savedCategories.expense.includes(form.category) ? form.category : savedCategories.expense[0] }));
+        setAppTechForm((form) => ({ ...form, category: savedCategories.appTech.includes(form.category) ? form.category : savedCategories.appTech[0] }));
         let data = await fetchAll();
         // 원격이 비어 있을 때만 예전 localStorage 데이터를 한 번 올려준다.
         if (!data.records.length && !data.financialProducts.length && !data.loans.length) {
@@ -377,7 +415,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     const quickDate = quickEntryDate(date);
     const key = monthKey(date);
     setIncomeForm({ date: quickDate, amount: "", title: "", category: categories.income[0], owner: "me" });
-    setAppTechForm({ date: quickDate, amount: "", title: "", repeatForever: false });
+    setAppTechForm({ date: quickDate, amount: "", category: categories.appTech[0], repeatForever: false });
     setEditingAppTechTotal(false);
     setAppTechTotalForm("");
     setVariableForm({
@@ -410,6 +448,57 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     next.setDate(1);
     setViewDate(next);
     resetQuickFormsForMonth(next);
+  };
+
+  const applyCategorySettings = (next: CategorySettings) => {
+    setCategories(next);
+    localStorage.setItem(CATEGORY_SETTINGS_KEY, JSON.stringify(next));
+  };
+
+  const addCategory = (group: CategoryGroup, event: FormEvent) => {
+    event.preventDefault();
+    const name = newCategoryName[group].trim();
+    if (!name) return;
+    if (categories[group].includes(name)) {
+      showToast("이미 등록된 분류예요.");
+      return;
+    }
+    applyCategorySettings({ ...categories, [group]: [...categories[group], name] });
+    setNewCategoryName((items) => ({ ...items, [group]: "" }));
+    showToast("분류를 추가했어요.");
+  };
+
+  const updateCategory = (group: CategoryGroup, index: number, nextName: string) => {
+    const name = nextName.trim();
+    const currentName = categories[group][index];
+    if (!name || (categories[group].some((item, itemIndex) => item === name && itemIndex !== index))) return;
+    applyCategorySettings({ ...categories, [group]: categories[group].map((item, itemIndex) => itemIndex === index ? name : item) });
+    if (group === "income") setIncomeForm((form) => ({ ...form, category: form.category === currentName ? name : form.category }));
+    if (group === "expense") {
+      setFixedForm((form) => ({ ...form, category: form.category === currentName ? name : form.category }));
+      setVariableForm((form) => ({ ...form, category: form.category === currentName ? name : form.category }));
+    }
+    if (group === "appTech") setAppTechForm((form) => ({ ...form, category: form.category === currentName ? name : form.category }));
+    setEditingCategory(null);
+    showToast("분류를 수정했어요.");
+  };
+
+  const removeCategory = (group: CategoryGroup, index: number) => {
+    if (categories[group].length <= 1) {
+      showToast("최소 한 개의 분류는 남겨두어야 해요.");
+      return;
+    }
+    const currentName = categories[group][index];
+    const fallback = categories[group][index === 0 ? 1 : 0];
+    applyCategorySettings({ ...categories, [group]: categories[group].filter((_, itemIndex) => itemIndex !== index) });
+    if (group === "income") setIncomeForm((form) => ({ ...form, category: form.category === currentName ? fallback : form.category }));
+    if (group === "expense") {
+      setFixedForm((form) => ({ ...form, category: form.category === currentName ? fallback : form.category }));
+      setVariableForm((form) => ({ ...form, category: form.category === currentName ? fallback : form.category }));
+    }
+    if (group === "appTech") setAppTechForm((form) => ({ ...form, category: form.category === currentName ? fallback : form.category }));
+    if (editingCategory?.group === group && editingCategory.index === index) setEditingCategory(null);
+    showToast("분류를 삭제했어요.");
   };
 
   const currentRecords = useMemo(() => {
@@ -531,7 +620,19 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
       const dayNumber = index - leadingDays + 1;
       if (dayNumber < 1 || dayNumber > daysInMonth) return { date: "", dayNumber: 0, records: [] };
       const date = `${monthKey(viewDate)}-${String(dayNumber).padStart(2, "0")}`;
-      return { date, dayNumber, records: recordsByDate.get(date) || [] };
+      const dailyRecords = recordsByDate.get(date) || [];
+      const appTechGroups = new Map<string, LedgerRecord>();
+      const groupedRecords = dailyRecords.reduce<LedgerRecord[]>((items, record) => {
+        if (record.category !== "앱테크 수입") {
+          items.push(record);
+          return items;
+        }
+        const current = appTechGroups.get(record.title);
+        if (current) current.amount += record.amount;
+        else appTechGroups.set(record.title, { ...record });
+        return items;
+      }, []);
+      return { date, dayNumber, records: [...groupedRecords, ...appTechGroups.values()] };
     });
   }, [currentRecords, viewDate]);
 
@@ -545,7 +646,8 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const showSavings = initialPage === "savings";
   const showCash = initialPage === "cash";
   const showData = false;
-  const showMonthControl = initialPage !== "loans" && initialPage !== "savings" && initialPage !== "installments";
+  const showAdmin = initialPage === "admin";
+  const showMonthControl = !["loans", "savings", "installments", "admin"].includes(initialPage);
 
   const page = pageInfo[initialPage];
 
@@ -619,12 +721,12 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
   const saveAppTech = (event: FormEvent) => {
     event.preventDefault();
     const amount = Number(appTechForm.amount);
-    if (!amount || !appTechForm.title.trim()) return;
+    if (!amount || !appTechForm.category.trim()) return;
     const record: LedgerRecord = {
       id: uid(),
       type: "income",
       date: appTechForm.date,
-      title: appTechForm.title.trim(),
+      title: appTechForm.category.trim(),
       amount,
       category: "앱테크 수입",
       subcategory: "",
@@ -638,7 +740,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
     };
     setRecords((items) => [...items, record]);
     void persist(() => saveBudgetRecord(record), "앱테크 수입을 저장하지 못했어요.");
-    setAppTechForm({ date: quickEntryDate(), amount: "", title: "", repeatForever: false });
+    setAppTechForm({ date: quickEntryDate(), amount: "", category: categories.appTech[0], repeatForever: false });
     showToast("앱테크 수입을 저장했어요.");
   };
 
@@ -1814,17 +1916,17 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                         </div>
                       </div>
                       <div className="field">
-                        <label htmlFor="appTechTitle">앱 또는 활동명</label>
-                        <input
-                          id="appTechTitle"
-                          type="text"
-                          lang="ko"
-                          maxLength={40}
-                          placeholder="예: 만보기, 설문조사"
-                          value={appTechForm.title}
-                          onChange={(event) => setAppTechForm({ ...appTechForm, title: event.target.value })}
+                        <label htmlFor="appTechCategory">앱 또는 활동명</label>
+                        <select
+                          id="appTechCategory"
+                          value={appTechForm.category}
+                          onChange={(event) => setAppTechForm({ ...appTechForm, category: event.target.value })}
                           required
-                        />
+                        >
+                          {categories.appTech.map((category) => (
+                            <option key={category} value={category}>{category}</option>
+                          ))}
+                        </select>
                       </div>
                       <label className="repeat-forever apptech-repeat-toggle">
                         <input
@@ -2671,6 +2773,68 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                     ))}
                   </div>
                 </div>
+              </div>
+            </section>
+          )}
+
+          {showAdmin && (
+            <section className="panel admin-panel" aria-labelledby="adminTitle">
+              <div className="panel-header">
+                <div>
+                  <h2 className="panel-title" id="adminTitle">가계부 관리자</h2>
+                  <p className="panel-subtitle">입력 화면에서 사용할 분류와 앱테크 활동명을 관리해요</p>
+                </div>
+              </div>
+              <p className="admin-intro">분류를 추가·수정·삭제하면 수입, 지출, 앱테크 입력 선택지에 바로 반영됩니다. 기존에 저장된 내역은 분류를 삭제해도 그대로 보존돼요.</p>
+              <div className="admin-category-grid">
+                {categoryAdminItems.map(({ group, title, description }) => (
+                  <article className="admin-category-card" key={group}>
+                    <h3>{title}</h3>
+                    <p>{description}</p>
+                    <form className="admin-add-form" onSubmit={(event) => addCategory(group, event)}>
+                      <input
+                        type="text"
+                        maxLength={30}
+                        placeholder="새 분류 이름"
+                        value={newCategoryName[group]}
+                        onChange={(event) => setNewCategoryName((items) => ({ ...items, [group]: event.target.value }))}
+                        aria-label={`${title} 새 분류 이름`}
+                      />
+                      <button type="submit">추가</button>
+                    </form>
+                    <div className="admin-category-list">
+                      {categories[group].map((name, index) => {
+                        const isEditing = editingCategory?.group === group && editingCategory.index === index;
+                        return (
+                          <div className="admin-category-row" key={`${group}-${name}`}>
+                            {isEditing ? (
+                              <form className="admin-edit-form" onSubmit={(event) => { event.preventDefault(); updateCategory(group, index, editingCategory.name); }}>
+                                <input
+                                  type="text"
+                                  maxLength={30}
+                                  value={editingCategory.name}
+                                  onChange={(event) => setEditingCategory({ ...editingCategory, name: event.target.value })}
+                                  aria-label={`${name} 수정`}
+                                  autoFocus
+                                />
+                                <button type="submit">저장</button>
+                                <button type="button" onClick={() => setEditingCategory(null)}>취소</button>
+                              </form>
+                            ) : (
+                              <>
+                                <span className="admin-category-name">{name}</span>
+                                <div className="admin-category-actions">
+                                  <button type="button" onClick={() => setEditingCategory({ group, index, name })}>수정</button>
+                                  <button type="button" className="delete" onClick={() => removeCategory(group, index)} disabled={categories[group].length <= 1}>삭제</button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </article>
+                ))}
               </div>
             </section>
           )}
