@@ -2720,7 +2720,7 @@ export default function SalimgyeolApp({ initialPage }: { initialPage: PageKey })
                     <div className="flow-row">
                       <span>고정지출</span>
                       <div className="flow-track">
-                        <div className="flow-fill fixed" style={{ width: flowWidth(fixed) }} />
+                        <div className="flow-fill fixed-cost" style={{ width: flowWidth(fixed) }} />
                       </div>
                       <strong>{money(fixed)}</strong>
                     </div>
